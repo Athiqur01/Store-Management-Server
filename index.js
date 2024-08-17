@@ -2,7 +2,7 @@ const express= require('express')
 const cors=require('cors')
 const app= express()
 const port=process.env.PORT||5012
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 require('dotenv').config()
 
 //middleware-------
@@ -36,6 +36,9 @@ async function run() {
     await client.connect();
 
     const itemsCollection = client.db("MymensinghBetar").collection('Items');
+    const srbCollection = client.db("MymensinghBetar").collection('srb');
+    const ledgerCollection = client.db("MymensinghBetar").collection('ledger');
+    const requisitionCollection = client.db("MymensinghBetar").collection('requisition');
 
     //Post operation---------
     app.post('/addItem', async(req,res)=>{
@@ -45,11 +48,63 @@ async function run() {
           res.send(result)
       })
 
+    app.post('/srb', async(req,res)=>{
+        const item=req.body
+        console.log(item)
+        const result=await srbCollection.insertOne(item)
+          res.send(result)
+      })
+
+    app.post('/ledger', async(req,res)=>{
+        const item=req.body
+        console.log(item)
+        const result=await ledgerCollection.insertOne(item)
+          res.send(result)
+      })
+
+    app.post('/requisition', async(req,res)=>{
+        const item=req.body
+        console.log(item)
+        const result=await requisitionCollection.insertOne(item)
+          res.send(result)
+      })
+
     //get operation------
     app.get("/items", async(req,res)=>{
         const cursor=await itemsCollection.find()
         const items=await cursor.toArray(cursor)
         res.send(items)
+    })
+
+    
+    //Patch operation------------
+    app.patch('/items/:itemName', async(req,res)=>{
+      const {itemName}= req.params
+      const filter={itemName}
+      const option={upsert:true}
+      const updatedItem=req.body
+      const item={
+        $set:{
+          quantity:updatedItem?.quantity
+        }
+      }
+      const result=await itemsCollection.updateOne(filter,item,option)
+      res.send(result)
+    })
+
+    //Patch operation for requisition------------
+    app.patch('/items/:id', async(req,res)=>{
+      const id= req.params.id
+      const filter={_id: new ObjectId(id)}
+      const option={upsert:true}
+      const updatedItem=req.body
+      const item={
+        $set:{
+          quantity:updatedItem?.newStock
+        }
+      }
+      const result=await itemsCollection.updateOne(filter,item,option)
+      res.send(result)
     })
   
 
