@@ -64,9 +64,19 @@ async function run() {
 
     app.post('/requisition', async(req,res)=>{
         const item=req.body
-        console.log(item)
-        const result=await requisitionCollection.insertOne(item)
+
+        const { q } = req.query;
+        const queryItem=await requisitionCollection.findOne({ itemName: new RegExp(q, 'i') })
+        console.log('quey item',queryItem)
+        
+        
+         if(queryItem){
+           return res.send('item is exist')
+         }
+        
+         const result=await requisitionCollection.insertOne(item)
           res.send(result)
+         
       })
 
     //get operation------
@@ -74,6 +84,12 @@ async function run() {
         const cursor=await itemsCollection.find()
         const items=await cursor.toArray(cursor)
         res.send(items)
+    })
+
+    app.get('/requisitedata',async(req,res)=>{
+      const cursor=await requisitionCollection.find()
+      const items=await cursor.toArray(cursor)
+      res.send(items)
     })
 
     
