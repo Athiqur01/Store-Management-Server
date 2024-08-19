@@ -39,6 +39,7 @@ async function run() {
     const srbCollection = client.db("MymensinghBetar").collection('srb');
     const ledgerCollection = client.db("MymensinghBetar").collection('ledger');
     const requisitionCollection = client.db("MymensinghBetar").collection('requisition');
+    const storeKeeperCollection = client.db("MymensinghBetar").collection('StoreKeeper');
 
     //Post operation---------
     app.post('/addItem', async(req,res)=>{
@@ -79,6 +80,12 @@ async function run() {
          
       })
 
+      app.post('/storeKeeper', async(req,res)=>{   // Post Operation to store keeper
+        const item=req.body
+        const result=storeKeeperCollection.insertOne(item)
+        res.send(result)
+      })
+
     //get operation------
     app.get("/items", async(req,res)=>{
         const cursor=await itemsCollection.find()
@@ -90,6 +97,19 @@ async function run() {
       const cursor=await requisitionCollection.find()
       const items=await cursor.toArray(cursor)
       res.send(items)
+    })
+
+    app.get('/storeKeeper',async(req,res)=>{
+      const cursor=await storeKeeperCollection.find()
+      const items=await cursor.toArray(cursor)
+      res.send(items)
+    })
+    app.get('/storeKeeper/:id',async(req,res)=>{
+      const id= req.params.id
+      const filter={_id: new ObjectId(id)}
+      const cursor=await storeKeeperCollection.findOne(filter)
+      const item=await cursor.toArray(cursor)
+      res.send(item)
     })
 
     
