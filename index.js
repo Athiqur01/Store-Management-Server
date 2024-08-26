@@ -40,7 +40,7 @@ async function run() {
     const ledgerCollection = client.db("MymensinghBetar").collection('ledger');
     const requisitionCollection = client.db("MymensinghBetar").collection('requisition');
     const storeKeeperCollection = client.db("MymensinghBetar").collection('StoreKeeper');
-
+    const userCollection=client.db("MymensinghBetar").collection('User')
     //Post operation---------
     app.post('/addItem', async(req,res)=>{
         const item=req.body
@@ -48,10 +48,15 @@ async function run() {
         const result=await itemsCollection.insertOne(item)
           res.send(result)
       })
+    app.post('/user', async(req,res)=>{
+        const item=req.body
+        console.log(item)
+        const result=await userCollection.insertOne(item)
+        res.send(result)
+      })
 
     app.post('/srb', async(req,res)=>{
         const item=req.body
-        console.log(item)
         const result=await srbCollection.insertOne(item)
           res.send(result)
       })
@@ -84,6 +89,7 @@ async function run() {
         const item=req.body
         const result=storeKeeperCollection.insertOne(item)
         res.send(result)
+        
       })
 
     //get operation------
@@ -93,24 +99,67 @@ async function run() {
         res.send(items)
     })
 
-    app.get('/requisitedata',async(req,res)=>{
-      const cursor=await requisitionCollection.find()
-      const items=await cursor.toArray(cursor)
-      res.send(items)
-    })
+
+    // Search products by name
+  app.get("/item", async(req,res)=>{
+    const { q } = req.query;
+    const items=await itemsCollection.find({ itemName: new RegExp(q, 'i') }).toArray()
+    res.send(items)
+  })
+
+
+  app.get("/user", async(req,res)=>{
+    const { email } = req.query;
+    const user=await userCollection.findOne({ email: new RegExp(email, 'i') })
+    res.send(user)
+  })
+    // app.get('/requisitedata',async(req,res)=>{
+    //   const cursor=await requisitionCollection.find()
+    //   const items=await cursor.toArray(cursor)
+    //   res.send(items)
+    // })
+
+    app.get('/storeKeepers/:id', async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+  
+      try {
+          const cursor = await storeKeeperCollection.find(filter).toArray();
+          res.send(cursor);
+      } catch (error) {
+          console.error('Error fetching store keeper:', error);
+          res.status(500).send({ message: 'Failed to fetch store keeper data', error });
+      }
+  });
 
     app.get('/storeKeeper',async(req,res)=>{
       const cursor=await storeKeeperCollection.find()
       const items=await cursor.toArray(cursor)
       res.send(items)
     })
-    app.get('/storeKeeper/:id',async(req,res)=>{
-      const id= req.params.id
-      const filter={_id: new ObjectId(id)}
-      const cursor=await storeKeeperCollection.findOne(filter)
-      const item=await cursor.toArray(cursor)
-      res.send(item)
+
+    
+    app.get("/adminData", async(req,res)=>{
+      const filter = { isChecked: true };
+        const checkedItems = await storeKeeperCollection.find(filter).toArray();
+        res.send(checkedItems);
     })
+
+    app.get("/keeperData", async(req,res)=>{
+      const filter = { isChecked: false };
+        const checkedItems = await storeKeeperCollection.find(filter).toArray();
+        res.send(checkedItems);
+    })
+
+    app.get('/count', async (req, res) => {
+      try {
+        const count = await itemsCollection.countDocuments();
+        res.json({ totalItems: count });
+      } catch (error) {
+        res.status(500).json({ error: 'Failed to count items' });
+      }
+    });
+    
 
     
     //Patch operation------------
@@ -143,7 +192,52 @@ async function run() {
       res.send(result)
     })
   
+    app.patch('/keeper/:id', async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      const option = { upsert: true };
+      const updatedItem = req.body;
+  
+      // Log the incoming request body
+      console.log('Updated Item:', updatedItem);
+  
+      // Construct the update object
+      const item = {
+          $set: {
+              isChecked: updatedItem?.isChecked
+          }
+      };
+  
+      try {
+          const result = await storeKeeperCollection.updateOne(filter, item, option);
+          res.send(result);
+      } catch (error) {
+          console.error('Error updating item:', error);
+          res.status(500).send({ message: 'Failed to update item', error });
+      }
+  });
 
+ // PATCH route to update demand for a specific item in StoreKeeper collection
+ app.patch('/storeKeeper/:storeKeeperId/item/:itemId', async (req, res) => {
+  try {
+      const { storeKeeperId, itemId } = req.params;
+      const { demand } = req.body;
+
+      const filter = { _id: new ObjectId(storeKeeperId), "LocalStorageItem._id": itemId };
+      const updateDocument = { $set: { "LocalStorageItem.$.demand": demand } };
+
+      const result = await storeKeeperCollection.updateOne(filter, updateDocument);
+
+      if (result.matchedCount === 0) {
+          return res.status(404).send({ error: 'Item not found or storeKeeper not found' });
+      }
+
+      res.send({ message: 'Demand updated successfully', result });
+  } catch (err) {
+      console.error("Error updating demand:", err);
+      res.status(500).send({ error: 'Failed to update demand' });
+  }
+});
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
