@@ -1,5 +1,6 @@
 const express= require('express')
 const cors=require('cors')
+const jwt=require('jsonwebtoken')
 const app= express()
 const port=process.env.PORT||5012
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
@@ -44,6 +45,43 @@ async function run() {
     const sibCollection = client.db("MymensinghBetar").collection('sib');
     const requisitionRegisterCollection = client.db("MymensinghBetar").collection('reqRegister');
     //Post operation---------
+
+    //jwt api---
+    app.post('/jwt', async(req,res)=>{
+      const user=req.body
+      const token=jwt.sign(user,process.env.Access_TOKEN_SECRET, {expiresIn:'1h'})
+      res.send({token})
+    })
+    //middleware for verify token
+    const verifyToken=(req,res,next)=>{
+      console.log('inside  verify token', req.headers.authorization)
+      if(!req.headers.authorization){
+        return res.status(401).send({message:'Access forbidden'})
+      }
+    const token=req.headers.authorization.split(' ')[1]
+    jwt.verify(token, process.env.Access_TOKEN_SECRET,
+      (err,decode)=>{
+        if(err){
+          return res.status(401).send({message:'Access forbidden'}) 
+        }
+        req.decode=decode
+        next()
+      }
+    )
+    }
+
+    //verify admin after verify token
+    const verifyAdmin=async(req,res,next)=>{
+      const email=req.decode.email
+      const query={email:email}
+      const user=await userCollection.findOne(query)
+      const isAdmin=user?.status==='admin'
+      if(!isAdmin){
+        return res.status(403).send({message:'Access forbidden'})
+      }
+      next()
+    }
+
     app.post('/addItem', async(req,res)=>{
         const item=req.body
         //console.log(item)
@@ -122,6 +160,35 @@ async function run() {
         res.send(items)
     })
 
+    app.get("/itemmessage", async(req,res)=>{
+        const items = await itemsCollection.find({
+          $expr: { $gt: [{ $toInt: "$minimumQuantity" }, { $toInt: "$quantity" }] }
+        }).toArray();
+        console.log('iyty',items)
+       // const items=await cursor.toArray(cursor)
+        res.send(items)
+    })
+
+    app.get("/users",verifyToken, async(req,res)=>{
+        console.log(req.headers)
+        const cursor=await userCollection.find()
+        const users=await cursor.toArray(cursor)
+        res.send(users)
+    })
+
+    app.get('/adminuser/:email',verifyToken,verifyAdmin, async(req,res)=>{
+      const email=req.params.email
+      if (email !== req.decode?.email){
+        return res.status(403).send({message:'Unauthorize access'})
+      }
+      const query={email:email}
+      const user=await userCollection.findOne(query)
+      let admin=false
+      if(user){
+        admin=user?.status==='admin'
+      }
+      res.send({admin})
+    })
 
     // Search products by name
   app.get("/item", async(req,res)=>{
@@ -248,6 +315,21 @@ async function run() {
      // console.log('sib:',cursor)
       res.send(cursor)
     })
+
+    //ledger data using pagenation
+    app.get("/shortedItem", async(req,res)=>{
+      const { q } = req.query;
+  
+      const page = parseInt(req.query.page, 10) || 0; // default to 0 if not provided
+      const size = parseInt(req.query.size, 10) || 10; // default to 10 if not provided
+      const items=await itemsCollection.find()
+      .skip(page * size)
+      .limit(size)
+      .toArray()
+      res.send(items) 
+  })
+
+
     app.get('/reqregister', async(req,res)=>{
       const cursor=await requisitionRegisterCollection.find().toArray()
      // console.log('sib:',cursor)
@@ -266,6 +348,13 @@ async function run() {
       const items=await requisitionRegisterCollection.findOne(filter)
       res.send(items)
       console.log('item name:',items)
+    })
+
+    app.get("/reqitems", async(req,res)=>{        //my requisition for deshboard
+      const { q } = req.query;
+      const items=await requisitionRegisterCollection.find({ 
+        "registerData.requisitionBy": new RegExp(q, 'i') }).toArray()
+      res.send(items)
     })
 
     //Delete Operation------------
@@ -306,6 +395,21 @@ async function run() {
         }
       }
       const result=await itemsCollection.updateOne(filter,item,option)
+      res.send(result)
+    })
+
+
+    app.patch('/updatestatus/:id', async(req,res)=>{
+      const id= req.params.id
+      const filter={_id: new ObjectId(id)}
+      const option={upsert:true}
+      const {updateStatus}=req.body
+      const item={
+        $set:{
+          status:updateStatus
+        }
+      }
+      const result=await userCollection.updateOne(filter,item,option)
       res.send(result)
     })
     //Patch operation for update item------------
