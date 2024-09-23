@@ -88,12 +88,20 @@ async function run() {
         const result=await itemsCollection.insertOne(item)
           res.send(result)
       })
-    app.post('/user', async(req,res)=>{
-        const item=req.body
-        //console.log(item)
-        const result=await userCollection.insertOne(item)
-        res.send(result)
-      })
+      
+      app.post('/user', async (req, res) => {
+        const item = req.body;
+        // Log the received data
+        console.log(item);
+        
+        try {
+            const result = await userCollection.insertOne(item);
+            res.send(result);
+        } catch (error) {
+            console.error("Error inserting user:", error);
+            res.status(500).send({ message: 'Failed to insert user data' });
+        }
+    });
 
     app.post('/srb', async(req,res)=>{
         const item=req.body
@@ -170,7 +178,7 @@ async function run() {
     })
 
     app.get("/users",verifyToken, async(req,res)=>{
-        console.log(req.headers)
+       // console.log(req.headers)
         const cursor=await userCollection.find()
         const users=await cursor.toArray(cursor)
         res.send(users)
@@ -190,12 +198,14 @@ async function run() {
       res.send({admin})
     })
 
-    // Search products by name
+  // Search products by name
   app.get("/item", async(req,res)=>{
     const { q } = req.query;
     const items=await itemsCollection.find({ itemName: new RegExp(q, 'i') }).toArray()
     res.send(items)
   })
+
+  
 
 
   app.get("/user", async(req,res)=>{
@@ -328,7 +338,54 @@ async function run() {
       .toArray()
       res.send(items) 
   })
+    //sib data for pagenation
+    app.get("/sibpage", async(req,res)=>{
+      const { q } = req.query;
+  
+      const page = parseInt(req.query.page, 10) || 0; // default to 0 if not provided
+      const size = parseInt(req.query.size, 10) || 10; // default to 10 if not provided
+      const items=await sibCollection.find()
+      .skip(page * size)
+      .limit(size)
+      .toArray()
+      res.send(items) 
+  })
+    //srb data for pagenation
+    app.get("/srbpage", async(req,res)=>{
+      const { q } = req.query;
+      const page = parseInt(req.query.page, 10) || 0; // default to 0 if not provided
+      const size = parseInt(req.query.size, 10) || 10; // default to 10 if not provided
+      const items=await srbCollection.find()
+      .skip(page * size)
+      .limit(size)
+      .toArray()
+      res.send(items) 
+  })
+    //item catalogue data for pagenation
+    app.get("/itemCatalog", async(req,res)=>{
+      const { q } = req.query;
+  
+      const page = parseInt(req.query.page, 10) || 0; // default to 0 if not provided
+      const size = parseInt(req.query.size, 10) || 10; // default to 10 if not provided
+      const items=await itemsCollection.find()
+      .skip(page * size)
+      .limit(size)
+      .toArray()
+      res.send(items) 
+  })
 
+   //requisition data for pagenation
+   app.get("/reqpage", async(req,res)=>{
+    const { q } = req.query;
+
+    const page = parseInt(req.query.page, 10) || 0; // default to 0 if not provided
+    const size = parseInt(req.query.size, 10) || 10; // default to 10 if not provided
+    const items=await itemsCollection.find()
+    .skip(page * size)
+    .limit(size)
+    .toArray()
+    res.send(items) 
+})
 
     app.get('/reqregister', async(req,res)=>{
       const cursor=await requisitionRegisterCollection.find().toArray()
@@ -337,10 +394,11 @@ async function run() {
     })
 
     app.get("/ledgerdetail", async(req,res)=>{
+      
       const {q} = req.query;
       const items=await ledgerCollection.find({ itemName: new RegExp(q, 'i') }).toArray()
+      console.log('dataaaa',q)
       res.send(items)
-      console.log('item name:',items)
     })
     app.get("/requisitiondownload/:id", async(req,res)=>{
       const id = req.params.id;
@@ -365,8 +423,40 @@ async function run() {
       const result=await storeKeeperCollection.deleteOne(query)
       res.send(result)
     })
-    
 
+   
+
+
+    app.delete('/deletereq/:id', async (req, res) => {
+      const id = req.params.id; 
+      try {
+        // Find the document that contains the object with the specific _id in LocalStorageItem array
+        const result = await storeKeeperCollection.updateOne(
+          { 'LocalStorageItem._id': id }, // Query to find the parent document
+          {
+            $pull: { LocalStorageItem: { _id: id } } // Remove the specific object from the array
+          }
+        );
+    
+        if (result.modifiedCount > 0) {
+          res.json({ message: 'Item deleted successfully' });
+        } else {
+          res.status(404).json({ message: 'Item not found' });
+        }
+      } catch (error) {
+        console.error('Error deleting item:', error);
+        res.status(500).json({ error: 'Server error' });
+      }
+    });
+    
+  //Delete Operation------------
+  app.delete("/deletetotal/:id",async(req,res)=>{
+    const id=req.params.id
+    console.log('idddd',id)
+    const query={_id:new ObjectId(id)}
+    const result=await storeKeeperCollection.deleteOne(query)
+    res.send(result)
+  })
     
     //Patch operation------------
     app.patch('/items/:itemName', async(req,res)=>{
@@ -436,7 +526,8 @@ async function run() {
       const updatedItem=req.body
       const item={
         $set:{
-          quantity:updatedItem?.balance
+          quantity:updatedItem?.balance,
+          lastOut: updatedItem?.lastOut
         }
       }
       const result=await itemsCollection.updateOne(filter,item,option)
